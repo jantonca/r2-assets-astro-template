@@ -1,0 +1,132 @@
+---
+// R2Picture.astro
+// <picture> element with multiple format sources (AVIF, WebP) for browser-level format negotiation
+// Uses Astro.url.hostname for dev detection (avoids import.meta.env issues with Cloudflare adapter)
+
+import r2Config from '../../config/r2-images'
+
+export interface Props {
+  src: string
+  alt: string
+  sizes?: string
+  widths?: number[]
+  formats?: ('avif' | 'webp' | 'original')[]
+  loading?: 'lazy' | 'eager'
+  class?: string
+  pictureClass?: string
+  aspectRatio?: string
+  r2Domain?: string
+  imagePath?: string
+  defaultFormat?: string
+  aspectRatioClass?: string
+}
+
+const {
+  src,
+  alt,
+  sizes = '100vw',
+  widths = r2Config.widths || [400, 800, 1200],
+  formats = ['avif', 'webp'],
+  loading = 'lazy',
+  class: imgClass,
+  pictureClass,
+  aspectRatio,
+  r2Domain = r2Config.domain,
+  imagePath = r2Config.imagePath,
+  defaultFormat = r2Config.defaultFormat,
+  aspectRatioClass = r2Config.aspectRatioClass || 'w-full h-full object-cover',
+} = Astro.props
+
+// Detect dev vs prod via hostname
+const isDev = Astro.url.hostname === 'localhost' || Astro.url.hostname === '127.0.0.1'
+
+// Generate srcset for a specific format
+const generateSrcset = (format: string) => {
+  if (!src || src.endsWith('.svg')) return undefined
+
+  // Dev mode: local path only
+  if (isDev) {
+    return `/${imagePath}/${src}`
+  }
+
+  const nameWithoutExt = src.replace(/\.[^.]+$/, '')
+  return widths
+    .map((width) => `${r2Domain}/${imagePath}/${nameWithoutExt}-${width}.${format} ${width}w`)
+    .join(', ')
+}
+
+// Default fallback URL
+const getDefaultUrl = () => {
+  if (isDev) {
+    return `/${imagePath}/${src}`
+  }
+
+  const nameWithoutExt = src.replace(/\.[^.]+$/, '')
+  const defaultWidth = widths[Math.floor(widths.length / 2)] || 800
+  return `${r2Domain}/${imagePath}/${nameWithoutExt}-${defaultWidth}.${defaultFormat}`
+}
+
+const defaultUrl = getDefaultUrl()
+const containerStyle = aspectRatio ? `aspect-ratio: ${aspectRatio};` : undefined
+---
+
+{
+  aspectRatio ? (
+    <div
+      style={containerStyle}
+      class={pictureClass}
+    >
+      <picture class='w-full h-full'>
+        {!isDev && formats.includes('avif') && (
+          <source
+            type='image/avif'
+            srcset={generateSrcset('avif')}
+            sizes={sizes}
+          />
+        )}
+
+        {!isDev && formats.includes('webp') && (
+          <source
+            type='image/webp'
+            srcset={generateSrcset('webp')}
+            sizes={sizes}
+          />
+        )}
+
+        <img
+          src={defaultUrl}
+          alt={alt}
+          loading={loading}
+          class={aspectRatioClass}
+          decoding='async'
+        />
+      </picture>
+    </div>
+  ) : (
+    <picture class={pictureClass}>
+      {!isDev && formats.includes('avif') && (
+        <source
+          type='image/avif'
+          srcset={generateSrcset('avif')}
+          sizes={sizes}
+        />
+      )}
+
+      {!isDev && formats.includes('webp') && (
+        <source
+          type='image/webp'
+          srcset={generateSrcset('webp')}
+          sizes={sizes}
+        />
+      )}
+
+      <img
+        src={defaultUrl}
+        alt={alt}
+        loading={loading}
+        class={imgClass}
+        decoding='async'
+      />
+    </picture>
+  )
+}

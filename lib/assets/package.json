@@ -1,0 +1,16 @@
+{
+  "name": "@local/r2-asset-processor",
+  "version": "1.0.0",
+  "description": "Asset processing pipeline for Cloudflare R2",
+  "type": "module",
+  "main": "core/processor.js",
+  "scripts": {
+    "setup": "node setup.js",
+    "assets:sync": "node cli/sync.js",
+    "assets:status": "node cli/status.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

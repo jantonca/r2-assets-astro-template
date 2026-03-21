@@ -1,0 +1,18 @@
+# Wrangler config for Pattern A: Separate CDN worker
+# Deploy this on a subdomain (e.g. cdn.yourproject.com)
+# Copy to project root as wrangler-assets.toml
+
+name = "my-project-assets"
+main = "worker-assets.js"
+compatibility_date = "2025-09-14"
+compatibility_flags = ["nodejs_compat"]
+
+# Custom domain for CDN
+routes = [
+  { pattern = "cdn.yourproject.com", custom_domain = true }
+]
+
+# R2 bucket binding
+[[r2_buckets]]
+binding = "IMAGES_BUCKET"
+bucket_name = "your-bucket-name"

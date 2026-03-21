@@ -1,0 +1,23 @@
+# Wrangler config for Pattern B: Single worker (site + assets)
+# Use this when your site is static (no SSR adapter)
+# Copy to project root as wrangler.toml
+
+name = "my-project"
+main = "worker-single.js"
+compatibility_date = "2025-09-14"
+compatibility_flags = ["nodejs_compat"]
+
+# Custom domains
+routes = [
+  { pattern = "yourproject.com", custom_domain = true },
+  { pattern = "www.yourproject.com", custom_domain = true }
+]
+
+# Static site assets (Astro build output)
+[assets]
+directory = "dist"
+
+# R2 bucket binding
+[[r2_buckets]]
+binding = "IMAGES_BUCKET"
+bucket_name = "your-bucket-name"
