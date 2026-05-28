@@ -47,9 +47,17 @@ Copy your chosen worker pattern to the project root (see `workers/` directory).
 
 ### 2. Install dependencies
 
+Requires Node.js 20 or newer.
+
 ```bash
-pnpm add -D sharp @aws-sdk/client-s3 dotenv
+pnpm add -D sharp @aws-sdk/client-s3 dotenv wrangler
 ```
+
+For dependency health checks, keep `pnpm-lock.yaml` committed in the consuming
+project and run `pnpm audit` during maintenance.
+
+This template pins direct dependency versions and declares `packageManager` for
+reproducible installs. Review and update those pins during scheduled maintenance.
 
 ### 3. Configure
 
@@ -66,6 +74,7 @@ Update the CDN domain in `src/lib/r2-utils.ts` and `src/config/r2-images.ts`.
     "assets:status": "node lib/assets/cli/status.js",
     "dev:images": "node lib/assets/cli/dev-images.js",
     "dev:images:pull": "node lib/assets/cli/dev-images.js pull",
+    "dev:images:check": "node lib/assets/cli/dev-images.js check",
     "deploy:assets": "wrangler deploy --config wrangler-assets.toml"
   }
 }
@@ -147,6 +156,10 @@ Requires `enableAVIF: true` in `assets.config.js` to generate AVIF variants.
 | `assets:status` | Show R2 storage usage and processed file counts |
 | `dev:images` | Interactive mode — check status and download missing images |
 | `dev:images:pull` | Download all missing images from R2 for local dev |
+| `dev:images:check` | Check local images against R2 without downloading |
+| `check:syntax` | Parse-check the asset processor JavaScript files |
+| `audit:deps` | Run `pnpm audit --audit-level low` |
+| `check` | Run syntax checks and dependency audit |
 
 ## Configuration
 
@@ -169,6 +182,12 @@ export default {
   },
 }
 ```
+
+## Security notes
+
+- Keep `pnpm-lock.yaml` committed and run `pnpm audit` before dependency updates.
+- SVG files are uploaded as trusted static assets. Do not upload untrusted or user-submitted SVGs unless you add a sanitizer such as SVGO with a hardened preset in the consuming project.
+- R2 credentials belong only in `.env` or platform secrets; do not commit them.
 
 ## File reference
 

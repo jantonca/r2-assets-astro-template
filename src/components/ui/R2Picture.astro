@@ -26,7 +26,7 @@ const {
   alt,
   sizes = '100vw',
   widths = r2Config.widths || [400, 800, 1200],
-  formats = ['avif', 'webp'],
+  formats = r2Config.formats || ['webp'],
   loading = 'lazy',
   class: imgClass,
   pictureClass,
@@ -61,9 +61,14 @@ const getDefaultUrl = () => {
     return `/${imagePath}/${src}`
   }
 
+  if (src.endsWith('.svg')) {
+    return `${r2Domain}/${imagePath}/${src}`
+  }
+
   const nameWithoutExt = src.replace(/\.[^.]+$/, '')
   const defaultWidth = widths[Math.floor(widths.length / 2)] || 800
-  return `${r2Domain}/${imagePath}/${nameWithoutExt}-${defaultWidth}.${defaultFormat}`
+  const targetFormat = defaultFormat === 'auto' ? 'webp' : defaultFormat
+  return `${r2Domain}/${imagePath}/${nameWithoutExt}-${defaultWidth}.${targetFormat}`
 }
 
 const defaultUrl = getDefaultUrl()

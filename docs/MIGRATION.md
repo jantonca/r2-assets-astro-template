@@ -19,11 +19,16 @@ Choose a worker pattern and copy it to your project root:
 
 ### 2. Install dependencies
 
+Requires Node.js 20 or newer.
+
 ```bash
-npm install -D sharp @aws-sdk/client-s3 dotenv
-# or
-pnpm add -D sharp @aws-sdk/client-s3 dotenv
+pnpm add -D sharp @aws-sdk/client-s3 dotenv wrangler
 ```
+
+Prefer pnpm for this template. Commit the generated `pnpm-lock.yaml` in the
+consuming project and run `pnpm audit` as part of regular maintenance.
+The template pins direct dependency versions and `packageManager`; review those
+pins during scheduled maintenance rather than relying on floating ranges.
 
 ### 3. Configure
 
@@ -31,7 +36,7 @@ Update `src/lib/r2-utils.ts` and `src/config/r2-images.ts` with your CDN domain.
 
 Copy `.env.example` to `.env` and fill in your R2 credentials.
 
-### 4. Add npm scripts to package.json
+### 4. Add package scripts to package.json
 
 ```json
 {
@@ -40,6 +45,8 @@ Copy `.env.example` to `.env` and fill in your R2 credentials.
     "assets:status": "node lib/assets/cli/status.js",
     "dev:images": "node lib/assets/cli/dev-images.js",
     "dev:images:pull": "node lib/assets/cli/dev-images.js pull",
+    "dev:images:check": "node lib/assets/cli/dev-images.js check",
+    "check:assets": "cd lib/assets && pnpm run check",
     "deploy:assets": "wrangler deploy --config wrangler-assets.toml"
   }
 }
@@ -56,7 +63,7 @@ wrangler r2 bucket create your-bucket-name
 Place images in `public/images/`, fonts in `public/fonts/`, etc.
 
 ```bash
-npm run assets:sync
+pnpm run assets:sync
 ```
 
 ### 7. Update components
@@ -80,6 +87,7 @@ Note: `src` should be relative to the `images/` directory, without the leading `
 public/images/
 public/fonts/
 public/documents/
+public/assets-manifest.json
 ```
 
 Remove assets from git tracking (they stay on disk):
@@ -114,10 +122,16 @@ If you have `@font-face` in CSS, update URLs to point to your CDN:
 After cloning the repo (images are gitignored), pull them from R2:
 
 ```bash
-npm run dev:images:pull
+pnpm run dev:images:pull
 ```
 
 Images load from local `public/images/` in dev mode, R2 CDN in production.
+
+## Security
+
+Keep `pnpm-lock.yaml` committed and run `pnpm audit` before dependency updates.
+Treat SVG files as trusted static assets unless you add explicit sanitization in
+your project.
 
 ## Rollback
 

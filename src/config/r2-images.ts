@@ -14,6 +14,9 @@ export const r2Config = {
   // Default image format
   defaultFormat: 'webp',
 
+  // Generated picture formats. Add 'avif' here only when assets.config.js also generates AVIF variants.
+  formats: ['webp'] satisfies Array<'avif' | 'webp' | 'original'>,
+
   // CSS classes for aspect ratio containers
   aspectRatioClass: 'w-full h-full object-cover',
 }

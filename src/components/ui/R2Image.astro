@@ -69,7 +69,8 @@ const generateImageUrl = (
   if (imgWidth) {
     const nameWithoutExt = imgSrc.replace(/\.[^.]+$/, '')
     const targetWidth = widths.find((w) => w >= imgWidth) || widths[widths.length - 1]
-    const targetFormat = preferredFormat || format || defaultFormat
+    const targetFormat =
+      preferredFormat === 'auto' ? defaultFormat : preferredFormat || defaultFormat
     return `${r2Domain}/${imagePath}/${nameWithoutExt}-${targetWidth}.${targetFormat}`
   }
 
@@ -80,7 +81,8 @@ const generateImageUrl = (
 const imageUrl = generateImageUrl(src, width, format)
 
 // Generate srcset for production only
-const srcset = isDev ? undefined : generateR2Srcset(src, format || defaultFormat, r2Config)
+const srcsetFormat = format === 'auto' ? defaultFormat : format || defaultFormat
+const srcset = isDev ? undefined : generateR2Srcset(src, srcsetFormat, r2Config)
 
 // Container styles for aspect ratio
 const containerStyle = aspectRatio ? `aspect-ratio: ${aspectRatio};` : undefined
