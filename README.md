@@ -4,7 +4,7 @@ Asset processing pipeline for Cloudflare R2. Generates responsive image variants
 
 ## What it does
 
-- **Images** — Resized into responsive variants (400, 800, 1200px) in WebP/AVIF, uploaded to R2 with a manifest to skip unchanged files
+- **Images** — Source originals plus responsive WebP variants (400, 800, 1200px by default), with optional AVIF outputs, are uploaded to R2 with a manifest to skip unchanged files
 - **Fonts** — Uploaded as-is with proper content-type headers
 - **PDFs/Documents** — Uploaded as-is
 - **Dev workflow** — Images are gitignored; `dev:images:pull` downloads originals from R2 for local development
@@ -27,6 +27,7 @@ Use this when your site uses the Astro Cloudflare adapter or any SSR setup that 
 
 ```
 yourproject.com      → Single worker (worker-single.js) → Static site + R2 bucket
+cdn.yourproject.com  ↗
 ```
 
 Use this when your site is fully static. One worker serves both the site and R2 assets. Includes format negotiation and Save-Data support.
@@ -43,14 +44,17 @@ src/config/r2-images.ts        → src/config/r2-images.ts
 assets.config.js               → assets.config.js
 ```
 
-Copy your chosen worker pattern to the project root (see `workers/` directory).
+Copy the `workers/` directory and your chosen Wrangler file into the Astro
+project. Keep the worker JavaScript files in `workers/`: the shared response
+helper imports `../assets.config.js` so processing and delivery use the same
+responsive widths.
 
 ### 2. Install dependencies
 
-Requires Node.js 20 or newer.
+Requires Node.js 20.9 or newer.
 
 ```bash
-pnpm add -D sharp @aws-sdk/client-s3 dotenv wrangler
+pnpm add -D sharp@0.35.3 @aws-sdk/client-s3@3.1116.0 dotenv@17.4.2 wrangler
 ```
 
 For dependency health checks, keep `pnpm-lock.yaml` committed in the consuming
@@ -58,6 +62,15 @@ project and run `pnpm audit` during maintenance.
 
 This template pins direct dependency versions and declares `packageManager` for
 reproducible installs. Review and update those pins during scheduled maintenance.
+Allow only Sharp's required install script in the consuming `package.json`:
+
+```json
+{
+  "pnpm": {
+    "onlyBuiltDependencies": ["sharp"]
+  }
+}
+```
 
 ### 3. Configure
 
@@ -75,6 +88,7 @@ Update the CDN domain in `src/lib/r2-utils.ts` and `src/config/r2-images.ts`.
     "dev:images": "node lib/assets/cli/dev-images.js",
     "dev:images:pull": "node lib/assets/cli/dev-images.js pull",
     "dev:images:check": "node lib/assets/cli/dev-images.js check",
+    "check:assets": "cd lib/assets && pnpm run check",
     "deploy:assets": "wrangler deploy --config wrangler-assets.toml"
   }
 }
@@ -131,7 +145,9 @@ The `src` is relative to `images/` — no leading `/images/` prefix.
 
 ### R2Picture component
 
-Use this when you want the browser to choose between AVIF and WebP:
+Use this when you want the browser to choose between AVIF and WebP. The checked-in
+default generates WebP only; add `avif` to each relevant `rules[].outputs` entry
+and to `src/config/r2-images.ts` before requesting AVIF sources:
 
 ```astro
 ---
@@ -146,8 +162,6 @@ import R2Picture from '../components/ui/R2Picture.astro'
 />
 ```
 
-Requires `enableAVIF: true` in `assets.config.js` to generate AVIF variants.
-
 ## CLI tools
 
 | Command | Description |
@@ -159,35 +173,75 @@ Requires `enableAVIF: true` in `assets.config.js` to generate AVIF variants.
 | `dev:images:check` | Check local images against R2 without downloading |
 | `check:syntax` | Parse-check the asset processor JavaScript files |
 | `audit:deps` | Run `pnpm audit --audit-level low` |
-| `check` | Run syntax checks and dependency audit |
+| `test:unit` | Run processor, development-image, and worker regression tests |
+| `check` | Run syntax checks, unit tests, and dependency audit |
 
 ## Configuration
 
 `assets.config.js` controls processing:
 
 ```js
+export const IMAGE_VARIANT_SIZES = [400, 800, 1200]
+
 export default {
-  sizes: [400, 800, 1200],
-  quality: { 400: 90, 800: 85, 1200: 80 },
-  enableAVIF: false,
+  sourcePath: 'public',
+  manifestPath: 'public/assets-manifest.json',
+  quality: {
+    webp: { 400: 90, 800: 85, 1200: 80, original: 80 },
+    avif: { 400: 75, 800: 65, 1200: 55, original: 55 },
+  },
+  enablePlaceholders: false,
+  skipUnchanged: true,
 
   // Additional directories beyond images, documents, fonts
   directories: ['footnotes', 'downloads'],
 
   rules: {
-    '.jpg': { outputs: ['webp'], sizes: [400, 800, 1200] },
-    '.png': { outputs: ['webp'], sizes: [400, 800, 1200] },
+    '.jpg': { outputs: ['webp'], sizes: IMAGE_VARIANT_SIZES },
+    '.png': { outputs: ['webp'], sizes: IMAGE_VARIANT_SIZES },
     '.pdf': { outputs: ['pdf'], sizes: ['original'] },
     '.woff2': { outputs: ['woff2'], sizes: ['original'] },
   },
 }
 ```
 
+Change `IMAGE_VARIANT_SIZES` once when a consumer needs different responsive
+widths. The processor, format negotiation, fallback chain, and Save-Data
+downgrade all consume that value. Use unique source basenames within each
+directory (for example, do not keep both `hero.jpg` and `hero.png`); processing
+fails before upload when two sources would overwrite the same generated key.
+The worker bundle imports `assets.config.js`, so keep that public configuration
+file declarative and free of Node.js-only imports.
+
+Legacy flat quality maps such as `{ 400: 90, 800: 85, 1200: 80 }` remain
+supported for existing consumers. Format generation is controlled only by each
+rule's `outputs` array.
+
+Manifest entry versioning automatically performs a one-time reprocessing pass
+when pipeline behavior changes. Version 1.1.0 uses that pass to upload source
+originals required by `dev:images:pull`.
+
 ## Security notes
 
 - Keep `pnpm-lock.yaml` committed and run `pnpm audit` before dependency updates.
 - SVG files are uploaded as trusted static assets. Do not upload untrusted or user-submitted SVGs unless you add a sanitizer such as SVGO with a hardened preset in the consuming project.
 - R2 credentials belong only in `.env` or platform secrets; do not commit them.
+- Stable object keys can be overwritten, so the included workers use bounded
+  caching rather than `immutable` responses.
+
+## Maintaining this template
+
+Run package checks from the nested asset package:
+
+```bash
+cd lib/assets
+pnpm install --frozen-lockfile
+pnpm run check
+```
+
+Worker changes also require a Sharp conversion smoke test and Wrangler dry-runs
+for both deployment patterns. See [the changelog](CHANGELOG.md) and
+[migration guide](docs/MIGRATION.md) before updating downstream copies.
 
 ## File reference
 
@@ -201,7 +255,7 @@ lib/assets/
     sync.js         — CLI: process and upload assets
     status.js       — CLI: show storage status
     dev-images.js   — CLI: download images for local dev
-  setup.js          — Interactive setup wizard
+  setup.js          — Non-interactive safe setup helper
 
 src/
   components/ui/
@@ -213,6 +267,7 @@ src/
     r2-images.ts    — CDN domain and image config
 
 workers/
+  r2-response.js          — Shared response, cache, MIME, and fallback utilities
   worker-assets.js      — Pattern A: separate CDN worker
   worker-single.js      — Pattern B: combined site + assets worker
   wrangler-assets.toml  — Wrangler config for Pattern A

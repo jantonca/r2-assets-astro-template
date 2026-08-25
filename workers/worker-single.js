@@ -8,17 +8,34 @@
  * Features: Format negotiation, Save-Data support, smart fallbacks.
  */
 
+import {
+  buildFallbackKeys,
+  buildFormatCandidates,
+  createAssetResponse,
+  downgradeVariantKey,
+  getVariantSizesForPath,
+  isSupportedAssetMethod,
+  methodNotAllowedResponse,
+} from './r2-response.js'
+
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, env) {
+    if (!isSupportedAssetMethod(request.method)) {
+      return methodNotAllowedResponse()
+    }
+
     const url = new URL(request.url)
 
     // Route asset requests to R2
     if (url.pathname.startsWith('/images/')) {
-      return handleImageRequest(request, env, ctx)
+      return handleImageRequest(request, env)
     }
 
-    if (url.pathname.startsWith('/documents/') || url.pathname.startsWith('/fonts/')) {
-      return handleStaticAssetRequest(request, env, ctx)
+    if (
+      url.pathname.startsWith('/documents/') ||
+      url.pathname.startsWith('/fonts/')
+    ) {
+      return handleStaticAssetRequest(request, env)
     }
 
     // Serve static site assets (Astro build output)
@@ -26,45 +43,60 @@ export default {
   },
 }
 
-async function handleImageRequest(request, env, ctx) {
+async function handleImageRequest(request, env) {
   const url = new URL(request.url)
   const accept = request.headers.get('Accept') || ''
   const saveData = request.headers.get('Save-Data') === 'on'
 
   let imagePath = url.pathname.substring(1)
+  const variantSizes = getVariantSizesForPath(imagePath)
 
   // Smart format selection based on Accept header
   const supportsAvif = accept.includes('image/avif')
   const supportsWebp = accept.includes('image/webp')
 
   // Try to upgrade format if requesting original
-  if (!imagePath.endsWith('.avif') && !imagePath.endsWith('.webp')) {
-    imagePath = await selectBestFormat(imagePath, { avif: supportsAvif, webp: supportsWebp }, env)
+  if (/\.(jpe?g|png|gif)$/i.test(imagePath)) {
+    imagePath = await selectBestFormat(
+      imagePath,
+      { avif: supportsAvif, webp: supportsWebp },
+      variantSizes,
+      env
+    )
   }
 
   // Downgrade size if Save-Data is on
-  if (saveData && imagePath.match(/-(\d+)\.(webp|avif)$/)) {
-    imagePath = imagePath.replace(/-1200\./, '-800.').replace(/-800\./, '-400.')
-  }
+  if (saveData) imagePath = downgradeVariantKey(imagePath, variantSizes)
 
   const object = await env.IMAGES_BUCKET.get(imagePath)
 
   if (!object) {
     // Try fallback chain
-    const fallback = await fetchWithFallback(imagePath, env, { avif: supportsAvif, webp: supportsWebp })
+    const fallback = await fetchWithFallback(
+      imagePath,
+      env,
+      { avif: supportsAvif, webp: supportsWebp },
+      variantSizes
+    )
     if (!fallback) return new Response('Image not found', { status: 404 })
 
-    const headers = buildCacheHeaders(fallback)
-    if (saveData) headers.set('Vary', 'Accept, Save-Data')
-    return new Response(fallback.body, { headers })
+    return createAssetResponse(
+      request,
+      fallback.object,
+      fallback.key,
+      'Accept, Save-Data'
+    )
   }
 
-  const headers = buildCacheHeaders(object)
-  if (saveData) headers.set('Vary', 'Accept, Save-Data')
-  return new Response(object.body, { headers })
+  return createAssetResponse(
+    request,
+    object,
+    imagePath,
+    'Accept, Save-Data'
+  )
 }
 
-async function handleStaticAssetRequest(request, env, ctx) {
+async function handleStaticAssetRequest(request, env) {
   const url = new URL(request.url)
   const assetPath = url.pathname.substring(1)
 
@@ -74,67 +106,29 @@ async function handleStaticAssetRequest(request, env, ctx) {
     return new Response('Asset not found', { status: 404 })
   }
 
-  const headers = buildCacheHeaders(object)
-  return new Response(object.body, { headers })
+  return createAssetResponse(request, object, assetPath)
 }
 
-function buildCacheHeaders(object) {
-  const contentType = object.httpMetadata?.contentType || getContentType(object.key || '')
-  const headers = new Headers()
-  headers.set('Content-Type', contentType)
-  headers.set('Cache-Control', 'public, max-age=31536000, immutable')
-  headers.set('CDN-Cache-Control', 'max-age=31536000')
-  headers.set('Vary', 'Accept')
-  headers.set('X-Content-Type-Options', 'nosniff')
-  headers.set('Access-Control-Allow-Origin', '*')
-  if (object.httpEtag) headers.set('ETag', object.httpEtag)
-  return headers
-}
-
-async function selectBestFormat(imagePath, supportedFormats, env) {
-  const basePath = imagePath.replace(/\.(jpg|jpeg|png|gif|webp|avif)$/i, '')
-
-  if (supportedFormats.avif) {
-    const avifPath = `${basePath}.avif`
-    if (await checkIfExists(avifPath, env)) return avifPath
-  }
-
-  if (supportedFormats.webp) {
-    const webpPath = `${basePath}.webp`
-    if (await checkIfExists(webpPath, env)) return webpPath
+async function selectBestFormat(imagePath, supportedFormats, variantSizes, env) {
+  for (const candidate of buildFormatCandidates(
+    imagePath,
+    supportedFormats,
+    variantSizes
+  )) {
+    if (await checkIfExists(candidate, env)) return candidate
   }
 
   return imagePath
 }
 
-async function fetchWithFallback(imagePath, env, supportedFormats) {
-  const match = imagePath.match(/^(.+?)(?:-(\d+))?\.(webp|avif|jpe?g|png|gif|svg)$/i)
-  if (!match) return null
-
-  const [, baseName, size, format] = match
-  const fallbacks = []
-
-  // If AVIF failed, try WebP
-  if (format === 'avif' && supportedFormats.webp) {
-    fallbacks.push(`${baseName}${size ? `-${size}` : ''}.webp`)
-  }
-
-  // Try different sizes
-  if (size) {
-    const sizes = [400, 800, 1200]
-    for (const s of sizes) {
-      if (s < parseInt(size)) {
-        fallbacks.push(`${baseName}-${s}.${format}`)
-      }
-    }
-  }
-
-  // Try original formats
-  fallbacks.push(`${baseName}.jpg`, `${baseName}.jpeg`, `${baseName}.png`)
-
-  for (const fallback of fallbacks) {
+async function fetchWithFallback(imagePath, env, supportedFormats, variantSizes) {
+  for (const fallback of buildFallbackKeys(
+    imagePath,
+    supportedFormats,
+    variantSizes
+  )) {
     const object = await env.IMAGES_BUCKET.get(fallback)
-    if (object) return object
+    if (object) return { key: fallback, object }
   }
 
   return null
@@ -147,32 +141,4 @@ async function checkIfExists(path, env) {
   } catch {
     return false
   }
-}
-
-function getContentType(path) {
-  const ext = path.split('.').pop()?.toLowerCase()
-  const types = {
-    'webp': 'image/webp',
-    'avif': 'image/avif',
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'png': 'image/png',
-    'gif': 'image/gif',
-    'svg': 'image/svg+xml',
-    'woff2': 'font/woff2',
-    'woff': 'font/woff',
-    'ttf': 'font/ttf',
-    'otf': 'font/otf',
-    'eot': 'application/vnd.ms-fontobject',
-    'pdf': 'application/pdf',
-    'doc': 'application/msword',
-    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'txt': 'text/plain',
-    'rtf': 'application/rtf',
-    'xls': 'application/vnd.ms-excel',
-    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'ppt': 'application/vnd.ms-powerpoint',
-    'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  }
-  return types[ext] || 'application/octet-stream'
 }

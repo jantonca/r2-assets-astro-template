@@ -3,8 +3,8 @@
 # Copy to project root as wrangler-assets.toml
 
 name = "my-project-assets"
-main = "worker-assets.js"
-compatibility_date = "2025-09-14"
+main = "workers/worker-assets.js"
+compatibility_date = "2026-08-25"
 compatibility_flags = ["nodejs_compat"]
 
 # Custom domain for CDN

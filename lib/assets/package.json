@@ -1,6 +1,6 @@
 {
   "name": "@local/r2-asset-processor",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Asset processing pipeline for Cloudflare R2",
   "type": "module",
   "packageManager": "pnpm@11.0.9",
@@ -12,18 +12,23 @@
     "dev:images": "node cli/dev-images.js",
     "dev:images:pull": "node cli/dev-images.js pull",
     "dev:images:check": "node cli/dev-images.js check",
-    "check:syntax": "node --check core/processor.js && node --check core/utils.js && node --check core/rules.js && node --check cli/sync.js && node --check cli/status.js && node --check cli/dev-images.js && node --check setup.js",
+    "check:syntax": "node --check core/processor.js && node --check core/utils.js && node --check core/rules.js && node --check cli/sync.js && node --check cli/status.js && node --check cli/dev-images.js && node --check setup.js && node --check ../../workers/r2-response.js && node --check ../../workers/worker-assets.js && node --check ../../workers/worker-single.js",
     "test:unit": "node --test test/*.test.js",
     "audit:deps": "pnpm audit --audit-level low",
     "check": "pnpm run check:syntax && pnpm run test:unit && pnpm run audit:deps"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "3.1055.0",
+    "@aws-sdk/client-s3": "3.1116.0",
     "dotenv": "17.4.2",
-    "sharp": "0.34.5"
+    "sharp": "0.35.3"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.9.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "sharp"
+    ]
   },
   "license": "MIT"
 }

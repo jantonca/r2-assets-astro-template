@@ -2,8 +2,7 @@ export interface R2Config {
   r2Domain: string
   imagePath: string
   widths: number[]
-  defaultFormat: string
-  fallbackToR2: boolean
+  defaultFormat: 'webp' | 'avif'
 }
 
 export const DEFAULT_R2_CONFIG: R2Config = {
@@ -11,7 +10,10 @@ export const DEFAULT_R2_CONFIG: R2Config = {
   imagePath: 'images',
   widths: [400, 800, 1200],
   defaultFormat: 'webp',
-  fallbackToR2: true,
+}
+
+export function isExternalImageSource(src: string): boolean {
+  return /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(src)
 }
 
 /** Generate a srcset string for R2-hosted responsive images */
@@ -20,7 +22,9 @@ export function generateR2Srcset(
   format: string,
   config: Pick<R2Config, 'r2Domain' | 'imagePath' | 'widths'>
 ): string | undefined {
-  if (!src || src.endsWith('.svg')) return undefined
+  if (!src || isExternalImageSource(src) || src.endsWith('.svg')) {
+    return undefined
+  }
 
   const nameWithoutExt = src.replace(/\.[^.]+$/, '')
 

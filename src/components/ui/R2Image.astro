@@ -5,6 +5,7 @@
 
 import {
   generateR2Srcset,
+  isExternalImageSource,
   DEFAULT_R2_CONFIG,
 } from '../../lib/r2-utils'
 
@@ -21,7 +22,7 @@ export interface Props {
   r2Domain?: string
   imagePath?: string
   widths?: number[]
-  defaultFormat?: string
+  defaultFormat?: 'webp' | 'avif' | 'auto'
   aspectRatioClass?: string
 }
 
@@ -37,12 +38,21 @@ const {
   aspectRatio,
   r2Domain = DEFAULT_R2_CONFIG.r2Domain,
   imagePath = DEFAULT_R2_CONFIG.imagePath,
-  widths = DEFAULT_R2_CONFIG.widths,
+  widths: configuredWidths = DEFAULT_R2_CONFIG.widths,
   defaultFormat = DEFAULT_R2_CONFIG.defaultFormat,
   aspectRatioClass = 'w-full h-full object-cover',
 } = Astro.props
 
-const r2Config = { r2Domain, imagePath, widths, defaultFormat, fallbackToR2: true }
+const validWidths = [...configuredWidths]
+  .filter((value) => value > 0)
+  .sort((a, b) => a - b)
+const widths = validWidths.length ? validWidths : DEFAULT_R2_CONFIG.widths
+const normalizedDefaultFormat = defaultFormat === 'auto' ? 'webp' : defaultFormat
+const r2Config = {
+  r2Domain,
+  imagePath,
+  widths,
+}
 
 // Detect dev vs prod via hostname (avoids import.meta.env MagicString conflict with Cloudflare adapter)
 const isDev = Astro.url.hostname === 'localhost' || Astro.url.hostname === '127.0.0.1'
@@ -53,7 +63,7 @@ const generateImageUrl = (
   imgWidth?: number,
   preferredFormat?: string,
 ) => {
-  if (imgSrc.startsWith('http')) return imgSrc
+  if (isExternalImageSource(imgSrc)) return imgSrc
 
   // SVG files: no resizing
   if (imgSrc.endsWith('.svg')) {
@@ -70,7 +80,9 @@ const generateImageUrl = (
     const nameWithoutExt = imgSrc.replace(/\.[^.]+$/, '')
     const targetWidth = widths.find((w) => w >= imgWidth) || widths[widths.length - 1]
     const targetFormat =
-      preferredFormat === 'auto' ? defaultFormat : preferredFormat || defaultFormat
+      preferredFormat === 'auto'
+        ? normalizedDefaultFormat
+        : preferredFormat || normalizedDefaultFormat
     return `${r2Domain}/${imagePath}/${nameWithoutExt}-${targetWidth}.${targetFormat}`
   }
 
@@ -81,7 +93,8 @@ const generateImageUrl = (
 const imageUrl = generateImageUrl(src, width, format)
 
 // Generate srcset for production only
-const srcsetFormat = format === 'auto' ? defaultFormat : format || defaultFormat
+const srcsetFormat =
+  format === 'auto' ? normalizedDefaultFormat : format || normalizedDefaultFormat
 const srcset = isDev ? undefined : generateR2Srcset(src, srcsetFormat, r2Config)
 
 // Container styles for aspect ratio
