@@ -17,6 +17,8 @@
   commands.
 - Restored negotiation for unsized variants such as converted GIFs and rejected
   generated-key collisions before upload.
+- Prevented GIF requests from selecting a same-basename raster source's sized
+  variant and bypassed raster format negotiation for SVG requests.
 - Added the missing static-assets binding and Worker-first R2 routes to the
   single-worker Wrangler template.
 - Stopped failed uploads and R2 listings from being reported as successful.
@@ -36,3 +38,5 @@
 - Updated `@aws-sdk/client-s3` to 3.1116.0 and the package Node.js floor to
   20.9.0.
 - Added processor, development-image, and worker regression tests.
+- Centralized processor extension classifications to keep collision planning
+  aligned with execution.

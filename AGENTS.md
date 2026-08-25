@@ -24,6 +24,8 @@ for live bucket operations. Tests must use mocked R2 bindings.
 
 - `assets.config.js` is the public processor contract. `rules[].outputs` is the
   single authority for generated formats.
+- Worker bundles import `assets.config.js`; keep it declarative and free of
+  Node.js-only imports.
 - Stable R2 keys are overwritten, so worker responses must not use
   `Cache-Control: immutable` unless filenames become content-addressed.
 - Both worker patterns share `workers/r2-response.js`; keep cache, metadata, and

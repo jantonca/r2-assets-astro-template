@@ -28,7 +28,8 @@ Keep `workers/r2-response.js` beside the selected worker. It imports the root
 Requires Node.js 20.9 or newer.
 
 ```bash
-pnpm add -D sharp@0.35.3 @aws-sdk/client-s3@3.1116.0 dotenv@17.4.2 wrangler
+pnpm add sharp@0.35.3 @aws-sdk/client-s3@3.1116.0 dotenv@17.4.2
+pnpm add -D wrangler
 ```
 
 Prefer pnpm for this template. Commit the generated `pnpm-lock.yaml` in the
@@ -60,6 +61,9 @@ Copy `.env.example` to `.env` and fill in your R2 credentials.
 }
 ```
 
+The `deploy:assets` script is for Pattern A. Pattern B uses the root
+`wrangler.toml`; add `"deploy": "wrangler deploy"` instead.
+
 ### 5. Create R2 bucket
 
 ```bash
@@ -68,7 +72,9 @@ wrangler r2 bucket create your-bucket-name
 
 ### 6. Process and upload assets
 
-Place images in `public/images/`, fonts in `public/fonts/`, etc.
+Place images in `public/images/`, fonts in `public/fonts/`, etc. These paths use
+the checked-in `sourcePath`; substitute the consumer's configured path when it
+is not `public`.
 
 ```bash
 pnpm run assets:sync
@@ -101,7 +107,9 @@ public/assets-manifest.json
 .dev.vars*
 ```
 
-Remove assets from git tracking (they stay on disk):
+Substitute custom `sourcePath` and `manifestPath` values from `assets.config.js`.
+Remove previously tracked assets from Git only when adopting the R2-only
+workflow (the files stay on disk):
 
 ```bash
 git rm -r --cached public/images/ public/fonts/
@@ -140,7 +148,9 @@ After cloning the repo (images are gitignored), pull them from R2:
 pnpm run dev:images:pull
 ```
 
-Images load from local `public/images/` in dev mode, R2 CDN in production.
+Images load from the configured local image directory in dev mode and the R2
+CDN in production. With the checked-in defaults, that directory is
+`public/images/`.
 
 ## Security
 

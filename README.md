@@ -39,22 +39,27 @@ Use this when your site is fully static. One worker serves both the site and R2 
 ```
 lib/assets/                    → lib/assets/
 src/components/ui/R2Image.astro → src/components/ui/R2Image.astro
+src/components/ui/R2Picture.astro → src/components/ui/R2Picture.astro (optional)
 src/lib/r2-utils.ts            → src/lib/r2-utils.ts
 src/config/r2-images.ts        → src/config/r2-images.ts
 assets.config.js               → assets.config.js
 ```
 
-Copy the `workers/` directory and your chosen Wrangler file into the Astro
-project. Keep the worker JavaScript files in `workers/`: the shared response
-helper imports `../assets.config.js` so processing and delivery use the same
-responsive widths.
+Copy the `workers/` directory into the Astro project. Keep the Worker JavaScript
+files there: the shared response helper imports `../assets.config.js` so
+processing and delivery use the same responsive widths. Then copy one Wrangler
+template to the project root:
+
+- Pattern A: `workers/wrangler-assets.toml` → `wrangler-assets.toml`
+- Pattern B: `workers/wrangler-single.toml` → `wrangler.toml`
 
 ### 2. Install dependencies
 
 Requires Node.js 20.9 or newer.
 
 ```bash
-pnpm add -D sharp@0.35.3 @aws-sdk/client-s3@3.1116.0 dotenv@17.4.2 wrangler
+pnpm add sharp@0.35.3 @aws-sdk/client-s3@3.1116.0 dotenv@17.4.2
+pnpm add -D wrangler
 ```
 
 For dependency health checks, keep `pnpm-lock.yaml` committed in the consuming
@@ -94,13 +99,18 @@ Update the CDN domain in `src/lib/r2-utils.ts` and `src/config/r2-images.ts`.
 }
 ```
 
+The `deploy:assets` script above is for Pattern A. For Pattern B, copy
+`wrangler-single.toml` to `wrangler.toml` and use
+`"deploy": "wrangler deploy"` instead.
+
 ### 5. Process and upload
 
 ```bash
 # Create R2 bucket
 wrangler r2 bucket create your-bucket-name
 
-# Place images in public/images/, fonts in public/fonts/, etc.
+# Default paths: public/images/, public/fonts/, etc.
+# Adjust them if assets.config.js uses a custom sourcePath.
 # Process and upload to R2
 pnpm run assets:sync
 ```
@@ -147,7 +157,8 @@ The `src` is relative to `images/` — no leading `/images/` prefix.
 
 Use this when you want the browser to choose between AVIF and WebP. The checked-in
 default generates WebP only; add `avif` to each relevant `rules[].outputs` entry
-and to `src/config/r2-images.ts` before requesting AVIF sources:
+and to `src/config/r2-images.ts` when AVIF should be enabled by default. An
+explicit `formats` prop can opt in per component:
 
 ```astro
 ---
