@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.1] - 2026-08-26
+
+### Fixed
+
+- Excluded R2 directory markers (zero-byte keys ending in `/`) from development
+  image listings and rejected them in `resolveLocalImagePath`. `path.resolve`
+  strips the trailing slash, so such a key resolved to the directory's own path
+  and was written as a file, after which every later download failed against it.
+  The image-extension filter already excluded them incidentally; this makes the
+  protection explicit so widening the format list cannot reintroduce the fault.
+- Created the destination directory before fetching an object and destroyed the
+  response body if the write fails. An unconsumed body keeps its socket checked
+  out of the SDK pool, so a run with failing writes exhausted the pool and hung
+  instead of reporting the error.
+
 ## [1.1.0] - 2026-08-25
 
 ### Security
